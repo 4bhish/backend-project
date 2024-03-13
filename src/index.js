@@ -11,8 +11,8 @@ dotenv.config({
 
 connectDB()
 .then(() => {
-    app.on("Error : ",(Error)=> {
-        console.log("Error : ",Error);
+    app.on("error", (Error)=> {
+        console.log("Error using port: ",Error);
         throw Error
     })
     app.listen(process.env.PORT || 8000,()=> {
