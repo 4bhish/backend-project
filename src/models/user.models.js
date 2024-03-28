@@ -3,10 +3,12 @@ import jwt from 'jsonwebtoken'
 import brcypt from 'bcrypt'
 
 const userSchema = new mongooose.Schema({
-    watchHistory: {
-        type: mongooose.Schema.Types.ObjectId,
-        ref: 'Video'
-    },
+    watchHistory: [
+        {
+            type: mongooose.Schema.Types.ObjectId,
+            ref: 'Video',
+        }
+    ],
     username: {
         type: String,
         required: true,
@@ -47,7 +49,7 @@ const userSchema = new mongooose.Schema({
 
 userSchema.pre('save', async function (next) {
     if (this.isModified('password')) {
-        this.password = brcypt.hash(this.password, 10)
+        this.password =  await brcypt.hash(this.password, 10)
     }
     next()
 })
@@ -55,7 +57,7 @@ userSchema.methods.isPasswordCorrect = async function (password) {
     return await brcypt.compare(password, this.password)
 }
 
-userSchema.methods.generateAccessToke = function () {
+userSchema.methods.generateAccessToken = function () {
     return jwt.sign({
         _id: this._id,
         username: this.username
@@ -68,6 +70,6 @@ userSchema.methods.generateAccessToken = function () {
         _id: this._id,
         username: this.username
     }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: process.env.REFRESH_TOKEN_EXPIRY });
-
 }
+
 export const User = mongooose.model('User', userSchema) 
