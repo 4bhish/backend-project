@@ -3,10 +3,24 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiRes } from "../utils/ApiRes.js";
 import { asynHandler } from "../utils/asyncHandler.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
+import jwt from 'jsonwebtoken';
+
+const generateAccessAndRefreshToken = async (userId) => {
+  try {
+    const user = await User.findById(userId)
+    const accessToken = await user.generateAccessToken()
+    const refreshToken = await user.generateRefreshToken()
+    user.refreshToken = refreshToken
+    await user.save({ validateBeforeSave: false })
+    return { accessToken, refreshToken }
+  }
+  catch (error) {
+    throw new ApiError(500, "error while creating user")
+  }
+}
 
 const register = asynHandler(async (req, res) => {
   const { username, email, fullname, password } = req.body;
-
   if ([username, email, fullname, password].some(field => field?.trim() === "")) {
     throw new ApiError(400, "All fields are required")
   }
@@ -19,8 +33,16 @@ const register = asynHandler(async (req, res) => {
     throw new ApiError(409, "user with same email or password already exists")
   }
 
-  const avatarLocalPath = req.files?.avatar[0]?.path;
-  const coverImageLocalPath = req.files?.coverImage[0]?.path;
+  let avatarLocalPath;
+  if (req.files && Array.isArray(req.files.avatar) && req.files.avatar.length > 0) {
+    avatarLocalPath = req.files.avatar[0].path;
+  }
+
+
+  let coverImageLocalPath;
+  if (req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length > 0) {
+    coverImageLocalPath = req.files.coverImage[0].path;
+  }
 
   const avatar = await uploadOnCloudinary(avatarLocalPath)
 
@@ -49,29 +71,9 @@ const register = asynHandler(async (req, res) => {
   )
 })
 
-const generateAccessAndRefreshToken = async (userId) => {
-  try {
-    const user = await User.findById(userId)
-    const accessToken = await user.generateAccessToken()
-    const refreshToken = await user.generateRefreshToken()
-    user.refreshToken = refreshToken
-    await user.save({ validateBeforeSave: false })
-    return { accessToken, refreshToken }
-  }
-  catch (error) {
-    throw new ApiError(500, "error while creating user")
-  }
-}
-
 const login = asynHandler(async (req, res) => {
-  //  first check if user has sent all required detailed
-  // check if user exist with those details
-  // check password
-  // generate acceess and refresh token
-  // give response
-
-  const { username, email, password } = req.body
-  if (!username || !email) {
+  const { username, email, password } = req.body;
+  if (!username && !email) {
     throw new ApiError(401, "Username or email is required")
   }
 
@@ -111,7 +113,6 @@ const login = asynHandler(async (req, res) => {
     )
 })
 
-
 const logout = asynHandler(async (req, res) => {
   await User.findByIdAndUpdate(req.user?._id, {
     $set: {
@@ -122,8 +123,43 @@ const logout = asynHandler(async (req, res) => {
   })
 })
 
+const refreshAccessToken = asynHandler(async (req, res) => {
+  const incomingRefreshToken = req.cookies.refreshToken || req.body.refreshToken;
+
+  if (!incomingRefreshToken) {
+    throw new ApiError(401, "Unauthorized access")
+  }
+
+  const decoded = jwt.verify(incomingRefreshToken, process.env.REFRESH_TOKEN_SECRET)
+  const user = await User.findById(decoded._id)
+
+  if (!user) {
+    throw new ApiError(401, "Unauthorized access")
+  }
+
+  const { accessToken, refreshToken } = await generateAccessAndRefreshToken(user_id)
+
+  return res
+    .status(201)
+    .cookie("accessToken", accessToken, {
+      httpOnly: true,
+      secure: true
+    })
+    .cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: true
+    })
+    .json(
+      new ApiRes(200,{
+        accessToken,
+        refreshToken
+      },"access token Refreshed")
+    )
+})
+
 export {
   register,
   login,
-  logout
+  logout,
+  refreshAccessToken
 }
