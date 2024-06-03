@@ -1,4 +1,5 @@
 import { User } from "../models/user.models.js";
+import { Video } from "../models/video.models.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiRes } from "../utils/ApiRes.js";
 import { asynHandler } from "../utils/asyncHandler.js";
@@ -41,7 +42,7 @@ const register = asynHandler(async (req, res) => {
       avatarLocalPath = req.files.avatar[0].path;
     }
   }
-  
+
   if (!avatarLocalPath) {
     throw new ApiError(401, "Failed to upload avatar ")
   }
@@ -52,8 +53,8 @@ const register = asynHandler(async (req, res) => {
 
 
   let coverImageLocalPath;
-  if(req.files){
-    if(Array.isArray(req.files.coverImage)){
+  if (req.files) {
+    if (Array.isArray(req.files.coverImage)) {
       coverImageLocalPath = req.files.coverImage[0].path;
     }
   }
@@ -130,17 +131,17 @@ const logout = asynHandler(async (req, res) => {
   })
 
   const options = {
-    httpOnly:true,
-    secure:true
+    httpOnly: true,
+    secure: true
   }
 
   return res
-  .status(201)
-  .clearCookie("accessToken",options)
-  .clearCookie("refreshToken",options)
-  .json(
-    new ApiRes(200,{},"User logged out successfully")
-  )
+    .status(201)
+    .clearCookie("accessToken", options)
+    .clearCookie("refreshToken", options)
+    .json(
+      new ApiRes(200, {}, "User logged out successfully")
+    )
 })
 
 const refreshAccessToken = asynHandler(async (req, res) => {
@@ -228,44 +229,73 @@ const updateUserDetails = asynHandler(async (req, res) => {
     )
 })
 
-const updateAvatar = asynHandler(async (req,res) => {
+const updateAvatar = asynHandler(async (req, res) => {
   const user = await User.findById(req.user._id)
-  if(!user){
-    throw new ApiError(401,"Unauthorized access")
+  if (!user) {
+    throw new ApiError(401, "Unauthorized access")
   }
-  
+
   let avatarLocalPath
 
-  if(req.file){
+  if (req.file) {
     avatarLocalPath = req.file.path
   }
 
-  if(!avatarLocalPath){
-    throw new ApiError(401,"Avatar is required")
+  if (!avatarLocalPath) {
+    throw new ApiError(401, "Avatar is required")
   }
 
   const avatar = await uploadOnCloudinary(avatarLocalPath)
-  if(!avatar){
-    throw new ApiError(401,"failed to upload Avatar")
+  if (!avatar) {
+    throw new ApiError(401, "failed to upload Avatar")
   }
-   
- const updatedUser = await User.findByIdAndUpdate(user._id,{
-  $set:{
-    avatar:avatar.url
-  }
- },{new:true}).select("-password -refreshToken")
+
+  const updatedUser = await User.findByIdAndUpdate(user._id, {
+    $set: {
+      avatar: avatar.url
+    }
+  }, { new: true }).select("-password -refreshToken")
 
   return res
-  .status(401)
-  .json(
-    new ApiRes(401,{
-      user:updatedUser
-    },
-    "avatar updated successfully"
-  )
-  )
+    .status(401)
+    .json(
+      new ApiRes(401, {
+        user: updatedUser
+      },
+        "avatar updated successfully"
+      )
+    )
 })
 
+const getWatchHistory = asynHandler(async (req, res) => {
+
+  const user = await User.findById(req.user._id)
+
+  if(!user){
+    throw new ApiError(401,"Unauthorized access")
+  }
+
+  const watchHistoryIdArr = user.watchHistory
+
+  const watchHistory = await Promise.all(watchHistoryIdArr.map(async (watchId) => {
+  return await Video.findById(watchId)
+  }))
+
+  if(!watchHistory){
+    throw ApiError(409,"Failed to find watch history data")
+  }
+
+  return res
+  .status(200)
+  .json(
+    new ApiRes(200,{
+      watchHistory:watchHistory
+    },
+  "User watch history fetched successfully"
+  )
+  )
+
+})
 
 export {
   register,
@@ -275,5 +305,6 @@ export {
   changeUserPassword,
   getCurrentUser,
   updateUserDetails,
-  updateAvatar
+  updateAvatar,
+  getWatchHistory,
 }
