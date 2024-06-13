@@ -1,6 +1,5 @@
-import mongoose, { Types } from "mongoose";
+import mongoose from "mongoose";
 import { User } from "../models/user.models.js";
-import { Video } from "../models/video.models.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiRes } from "../utils/ApiRes.js";
 import { asynHandler } from "../utils/asyncHandler.js";
@@ -431,6 +430,7 @@ const getWatchHistory = asynHandler(async (req, res) => {
     )
 
 })
+
 
 
 
