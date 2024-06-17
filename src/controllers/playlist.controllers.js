@@ -85,61 +85,143 @@ const addVideoToPlaylist = asynHandler(async (req, res) => {
 
 
 const getUserPlaylists = asynHandler(async (req, res) => {
-   const {userId} = req.params ;
+    const { userId } = req.params;
 
-   if(!userId){
-    throw new ApiError(400,"User id missing")
-   }
+    if (!userId) {
+        throw new ApiError(400, "User id missing")
+    }
 
-   const userPlaylist = await Playlist.aggregate([
-    {
-      $match: {
-        owner:new mongoose.Types.ObjectId(userId)
-      }
-    },
-    {
-      $unwind:"$playlistVideos"
-    },
-    {
-      $lookup: {
-        from: "videos",
-        localField: "playlistVideos",
-        foreignField: "_id",
-        as: "video_details",
-      }
-    },
-    {
-      $addFields: {
-       video_details:{$first:"$video_details"}
-      }
-    },
-    {
-      $group: {
-        _id: "$_id", 
-        name: { $first: "$name" }, 
-        description: { $first: "$description" }, 
-        video_details: { $push: "$video_details" }
-      }
-    },
-    {
-        $project: {
-          name:1,
-          description:1,
-          video_details:1
+    const userPlaylist = await Playlist.aggregate([
+        {
+            $match: {
+                owner: new mongoose.Types.ObjectId(userId)
+            }
+        },
+        {
+            $unwind: "$playlistVideos"
+        },
+        {
+            $lookup: {
+                from: "videos",
+                localField: "playlistVideos",
+                foreignField: "_id",
+                as: "video_details",
+            }
+        },
+        {
+            $addFields: {
+                video_details: { $first: "$video_details" }
+            }
+        },
+        {
+            $group: {
+                _id: "$_id",
+                name: { $first: "$name" },
+                description: { $first: "$description" },
+                video_details: { $push: "$video_details" }
+            }
+        },
+        {
+            $project: {
+                name: 1,
+                description: 1,
+                video_details: 1
+            }
         }
-      }
-  ])
+    ])
 
-   return res
-   .status(200)
-   .json(
-    new ApiRes(200,userPlaylist,"user playlist fetched successfully")
-   )
+    return res
+        .status(200)
+        .json(
+            new ApiRes(200, userPlaylist, "user playlist fetched successfully")
+        )
 
+})
+
+const removeVideoFromPlaylist = asynHandler(async (req, res) => {
+    const { playlistId, videoId } = req.params
+
+    const playlist = await Playlist.findById(playlistId)
+
+    if (!playlist) {
+        throw new ApiError(404, "Playlist not found")
+    }
+
+    if (playlist.owner.toString() !== req.user._id.toString()) {
+        throw new ApiError(403, "You dont have access to delete video from this playlist")
+    }
+
+   const updatedPlaylist =  await Playlist.findByIdAndUpdate(playlist._id,{
+        $pull:{playlistVideos:videoId}
+    },{new:true})
+
+    return res
+    .status(200)
+    .json(
+        new ApiRes(200,updatedPlaylist,"Video removed from playlist successfully")
+    )
+
+})
+
+const deletePlaylist  = asynHandler(async(req,res) => {
+    const {playlistId} = req.params
+
+    const playlist  = await Playlist.findById(playlistId)
+
+    if(!playlist){
+        throw new ApiError(404,"playlist not found")
+    }
+
+    if(playlist.owner.toString() !== req.user._id.toString()){
+        throw new ApiError(403,"You do not have access to delete this.")
+    }
+
+    await Playlist.findByIdAndDelete(playlist._id)
+
+    return res
+    .status(200)
+    .json(
+        new ApiRes(200,{},"Playlist deleted successfully")
+    )
+})
+
+const updatePlaylist = asynHandler(async(req,res)=>{
+    const {playlistId} = req.params
+    const {name,description} = req.body
+
+    if(name.trim() === ""){
+        throw new ApiError(400,"Playlist name is required")
+    }
+
+    const playlist = await Playlist.findById(playlistId)
+
+    if(playlist.owner.toString() !== req.user._id.toString()){
+        throw new ApiError(403,"Forbidden access")
+    }
+
+  const updatedPlaylist =  await Playlist.findByIdAndUpdate(playlist._id,{
+        $set:{
+            name:name,
+            description:description
+        }
+    },{
+        new:true
+    })
+
+    return res
+    .status(201)
+    .json(
+        new ApiRes(201,updatedPlaylist,"Playlist updated successfully")
+    )
+    
 })
 
 export {
     createPlaylist,
     addVideoToPlaylist,
     getUserPlaylists,
+    removeVideoFromPlaylist,
+    deletePlaylist,
+    updatePlaylist
+
 }
